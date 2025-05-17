@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts     Account[]
+  sessions     Session[]
+  portfolios   Portfolio[] // your app-specific model (optional)
+  sharedAccess SharedPortfolioAccess[]
+
+  createdAt DateTime @default(now())
+}
+
+model Account {
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Portfolio {
+  id          String                  @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  visibility  Visibility              @default(PRIVATE)
+  holdings    Holding[]
+  cash        Float                   @default(0)
+  ownerId     String
+  owner       User                    @relation(fields: [ownerId], references: [id])
+  insights    AIInsights?
+  sharedLinks SharedPortfolioAccess[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+}
+
+model Holding {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  ticker      String
+  quantity    Float
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+}
+
+model SharedPortfolioAccess {
+  id             String           @id @default(auto()) @map("_id") @db.ObjectId
+  token          String           @unique
+  portfolio      Portfolio        @relation(fields: [portfolioId], references: [id])
+  portfolioId    String
+  createdBy      String // userId
+  createdAt      DateTime         @default(now())
+  revoked        Boolean          @default(false)
+  User           User?            @relation(fields: [userId], references: [id])
+  userId         String?          @db.ObjectId
+  TokenAccessLog TokenAccessLog[] @relation("TokenToAccessLog")
+}
+
+model TokenAccessLog {
+  id                    String                 @id @default(auto()) @map("_id") @db.ObjectId
+  token                 String // maps to SharedPortfolioAccess.token
+  ip                    String?
+  userAgent             String?
+  viewerUserId          String? // optional user ID if logged in later
+  createdAt             DateTime               @default(now())
+  SharedPortfolioAccess SharedPortfolioAccess? @relation("TokenToAccessLog", fields: [token], references: [token])
+}
+
+model AIInsights {
+  id                      String    @id @default(auto()) @map("_id") @db.ObjectId
+  summary                 String
+  diversificationAnalysis String
+  sectorExposure          String
+  oneLinerThesis          String
+  portfolio               Portfolio @relation(fields: [portfolioId], references: [id])
+  portfolioId             String    @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+  SMART_SHARED
+}
